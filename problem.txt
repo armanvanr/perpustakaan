@@ -1,0 +1,16 @@
+API Perpustakaan
+A. Entitas:
+
+  1. Buku
+
+  2. Penulis/Author
+
+  3. Genre/Kategori
+
+  4. User: type = {admin, member}
+
+B. Transaksi:
+
+  
+  - peminjaman: status = {requested, approved, returned}
+     - user member bisa mengajukan peminjaman, admin yg mengapprove peminjaman dan pengembalian buku
