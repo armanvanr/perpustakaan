@@ -139,7 +139,7 @@ def get_users():
         result = [{"name": user.name, "type": user.type} for user in User.query.all()]
         return {"users": result}
     elif login() == "Wrong pwd":
-        return {"message": "Incorrect password"}, 404
+        return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
 
@@ -151,7 +151,7 @@ def user_details(id):
         result = {"name": user.name, "type": user.type, "email": user.email}
         return {"user details": result}
     elif login() == "Wrong pwd":
-        return {"message": "Incorrect password"}, 404
+        return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
 
@@ -206,7 +206,7 @@ def add_book():
         db.session.commit()
         return {"message": "Book added"}, 201
     elif login() == "Wrong pwd":
-        return {"message": "Incorrect password"}, 404
+        return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
 
@@ -223,7 +223,48 @@ def update_book(id):
         db.session.commit()
         return {"message": "Book updated"}
     elif login() == "Wrong pwd":
-        return {"message": "Incorrect password"}, 404
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+@app.get("/genres")
+def get_genres():
+    result = [genre.name for genre in Genre.query.all()]
+    return {"Genres": result}
+
+
+@app.post("/genre")
+def add_genre():
+    if login() == "admin":
+        data = request.get_json()
+        genre = Genre.query.filter_by(name=data["genre_name"]).first()
+        if genre:
+            return {"message": "A genre already exists"}, 400
+
+        nextval = db.session.execute(text("SELECT nextval('genre_id_seq')")).scalar()
+        g_id = "ge" + str(nextval).zfill(3)
+
+        new_genre = Genre(id=g_id, name=data["genre_name"])
+        db.session.add(new_genre)
+        db.session.commit()
+        return {"message": "Genre added"}, 201
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+@app.put("/genre/<id>")
+def update_genre(id):
+    if login() == "admin":
+        data = request.get_json()
+        genre = Genre.query.get(id)
+        genre.name = data.get("genre_name", genre.name)
+        db.session.commit()
+        return {"message": "Genre updated"}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
 
