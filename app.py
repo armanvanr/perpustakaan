@@ -1,9 +1,9 @@
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from sqlalchemy import text
 from dotenv import load_dotenv
 import os
-from flask_migrate import Migrate
-import itertools
 
 # load environment variables from .env
 load_dotenv()
@@ -23,11 +23,12 @@ migrate = Migrate(app, db)
 # User table
 class User(db.Model):
     __tablename__ = "user"
-    id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
+
+    id = db.Column(db.String, primary_key=True, unique=True, index=True)
     name = db.Column(db.String, nullable=False)
     email = db.Column(db.String, nullable=False, unique=True)
     password = db.Column(db.String, nullable=False)
-    type = db.Column(db.String, nullable=False)
+    type = db.Column(db.String, nullable=False, default="member")
 
     def __repr__(self):
         return f"<User {self.name}>"
@@ -36,10 +37,10 @@ class User(db.Model):
 # Book table
 class Book(db.Model):
     __tablename__ = "book"
+
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
     title = db.Column(db.String, nullable=False)
-    status = db.Column(db.String, nullable=True)
-    user_id = db.Column(db.String, db.ForeignKey("user.id"), nullable=False)
+    pages = db.Column(db.Integer, nullable=True)
 
     def __repr__(self):
         return f"<Book {self.title}>"
@@ -48,6 +49,7 @@ class Book(db.Model):
 # Author table
 class Author(db.Model):
     __tablename__ = "author"
+
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
     name = db.Column(db.String, nullable=False)
 
@@ -58,11 +60,25 @@ class Author(db.Model):
 # Genre table
 class Genre(db.Model):
     __tablename__ = "genre"
+
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
     name = db.Column(db.String, nullable=False)
 
     def __repr__(self):
         return f"<Genre {self.name}>"
+
+
+# Transaction table
+class Borrow(db.Model):
+    __tablename__ = "borrow"
+
+    id = db.Column(db.String, primary_key=True, unique=True, index=True)
+    book_id = db.Column(db.String, db.ForeignKey("book.id"), nullable=False)
+    user_id = db.Column(db.String, db.ForeignKey("user.id"), nullable=False)
+    status = db.Column(db.String, nullable=True)
+
+    def __repr__(self):
+        return f"<Borrow status: {self.status}>"
 
 
 # Book-Author table
@@ -95,6 +111,40 @@ class Book_Genre(db.Model):
 @app.get("/")
 def welcome():
     return {"message": "Welcome to API Perpustakaan"}
+
+
+# Users
+@app.get("/users")
+def get_users():
+    result = [{"name": user.name, "type": user.type} for user in User.query.all()]
+    return {"users": result}
+
+
+@app.get("/user/<id>")
+def get_user(id):
+    user = User.query.get(id)
+    result = {"name": user.name, "type": user.type, "email": user.email}
+    return {"user details": result}
+
+
+@app.post("/user")
+def create_user():
+    data = request.get_json()
+
+    nextval = db.session.execute(text("SELECT nextval('user_id_seq')")).scalar()
+    u_id = "user" + str(nextval).zfill(3)
+
+    new_user = User(
+        id=u_id,
+        name=data["name"],
+        email=data["email"],
+        password=data["password"],
+        # type="admin",
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    return {"message": "User account successfully created"}, 201
+
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,0 +1,20 @@
+-- SEQUENCES
+CREATE SEQUENCE book_id_seq AS INT MINVALUE 1 MAXVALUE 999 START 1 NO CYCLE;
+
+CREATE SEQUENCE author_id_seq AS INT MINVALUE 1 MAXVALUE 999 START 1 NO CYCLE;
+
+CREATE SEQUENCE genre_id_seq AS INT MINVALUE 1 MAXVALUE 999 START 1 NO CYCLE;
+
+CREATE SEQUENCE user_id_seq AS INT MINVALUE 1 MAXVALUE 999 START 1 NO CYCLE;
+-- setval of the currentval = 1
+SELECT setval('user_id_seq', 1)
+-- setval of the nextval = 1
+SELECT setval('user_id_seq', 1, false)
+
+CREATE SEQUENCE borrow_id_seq AS INT MINVALUE 1 MAXVALUE 999 START 1 NO CYCLE;
+
+-- TABLES
+SELECT * FROM public.user
+
+DELETE FROM public.user
+WHERE id = 'user002'
