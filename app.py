@@ -107,6 +107,23 @@ class Book_Genre(db.Model):
         return f"<Book-Genre: {self.book_id}-{self.genre_id}>"
 
 
+# Auth
+def login():
+    data_email = request.authorization["username"]
+    data_pwd = request.authorization["password"]
+    user = User.query.filter_by(email=data_email).first()
+    if not user:
+        return "unauthorized"
+
+    if user.password != data_pwd:
+        return "Wrong pwd"
+
+    if user.type == "admin":
+        return "admin"
+    else:
+        return "member"
+
+
 # Routes
 @app.get("/")
 def welcome():
@@ -116,15 +133,25 @@ def welcome():
 # Users
 @app.get("/users")
 def get_users():
-    result = [{"name": user.name, "type": user.type} for user in User.query.all()]
-    return {"users": result}
+    if login() == "admin":
+        result = [{"name": user.name, "type": user.type} for user in User.query.all()]
+        return {"users": result}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 404
+    else:
+        return {"message": "Unauthorized"}, 401
 
 
 @app.get("/user/<id>")
 def get_user(id):
-    user = User.query.get(id)
-    result = {"name": user.name, "type": user.type, "email": user.email}
-    return {"user details": result}
+    if login() == "admin":
+        user = User.query.get(id)
+        result = {"name": user.name, "type": user.type, "email": user.email}
+        return {"user details": result}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 404
+    else:
+        return {"message": "Unauthorized"}, 401
 
 
 @app.post("/user")
