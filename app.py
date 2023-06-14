@@ -137,7 +137,10 @@ def welcome():
 @app.get("/users")
 def get_users():
     if login() == "admin":
-        result = [{"name": user.name, "type": user.type} for user in User.query.all()]
+        result = [
+            {"name": user.name, "type": user.type, "id": user.id}
+            for user in User.query.all()
+        ]
         return {"users": result}
     elif login() == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
@@ -163,7 +166,7 @@ def create_user():
     user = User.query.filter_by(email=data["email"]).first()
     if user:
         return {"message": "Account with that email already exists"}
-    
+
     nextval = db.session.execute(text("SELECT nextval('user_id_seq')")).scalar()
     u_id = "user" + str(nextval).zfill(3)
 
@@ -181,7 +184,7 @@ def create_user():
 
 @app.get("/books")
 def get_books():
-    result = [{"title": book.title} for book in Book.query.all()]
+    result = [{"title": book.title, "id": book.id} for book in Book.query.all()]
     return {"books": result}
 
 
@@ -241,7 +244,7 @@ def update_book(id):
 
 @app.get("/genres")
 def get_genres():
-    result = [genre.name for genre in Genre.query.all()]
+    result = [{"genre": genre.name, "id": genre.id} for genre in Genre.query.all()]
     return {"Genres": result}
 
 
@@ -282,7 +285,7 @@ def update_genre(id):
 
 @app.get("/authors")
 def get_authors():
-    result = [author.name for author in Author.query.all()]
+    result = [{"name": author.name, "id": author.id} for author in Author.query.all()]
     return {"Authors": result}
 
 
@@ -301,7 +304,7 @@ def add_author():
         author = Author.query.filter_by(name=data["name"]).first()
         if author:
             return {"message": "Author already exists"}
-        
+
         nextval = db.session.execute(text("SELECT nextval('author_id_seq')")).scalar()
         a_id = "au" + str(nextval).zfill(3)
 
@@ -316,6 +319,87 @@ def add_author():
     else:
         return {"message": "Unauthorized"}, 401
 
+
+# Junction Tables' Endpoints
+@app.get("/bookauthors")
+def get_book_author():
+    if login() == "admin":
+        result = [
+            {"book_id": ba.book_id, "author_id": ba.author_id}
+            for ba in Book_Author.query.all()
+        ]
+        return {"book-author": result}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+@app.post("/bookauthor")
+def add_book_author():
+    if login() == "admin":
+        data = request.get_json()
+        ba = Book_Author.query.filter_by(
+            book_id=data["book_id"], author_id=data["author_id"]
+        ).first()
+        if ba:
+            return {"message": "Data already inserted"}, 400
+
+        new_input = Book_Author(book_id=data["book_id"], author_id=data["author_id"])
+        db.session.add(new_input)
+        db.session.commit()
+        print(new_input)
+        return {"message": "Book-Author data inserted"}, 201
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+@app.get("/bookgenres")
+def get_book_genre():
+    if login() == "admin":
+        result = [
+            {"book_id": bg.book_id, "genre_id": bg.genre_id}
+            for bg in Book_Genre.query.all()
+        ]
+        return {"book-genre": result}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+@app.post("/bookgenre")
+def add_book_genre():
+    if login() == "admin":
+        data = request.get_json()
+        bg = Book_Genre.query.filter_by(
+            book_id=data["book_id"], genre_id=data["genre_id"]
+        ).first()
+        if bg:
+            return {"message": "Data already inserted"}, 400
+
+        new_input = Book_Genre(book_id=data["book_id"], genre_id=data["genre_id"])
+        db.session.add(new_input)
+        db.session.commit()
+        print(new_input)
+        return {"message": "Book-Genre data inserted"}, 201
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+# @app.get("/borrows")
+# def get_borrows():
+#     if login() == "admin":
+#         result = [{} for borrow in Borrow.query.all()]
+#         return {"result":result}
+#     elif login() == "Wrong pwd":
+#         return {"message": "Incorrect password"}, 400
+#     else:
+#         return {"message": "Unauthorized"}, 401
 
 if __name__ == "__main__":
     app.run(debug=True)
