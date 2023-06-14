@@ -39,7 +39,7 @@ class Book(db.Model):
     __tablename__ = "book"
 
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
-    title = db.Column(db.String, nullable=False)
+    title = db.Column(db.String, nullable=False, unique=True)
     pages = db.Column(db.SmallInteger, nullable=False, default=1)
     publisher = db.Column(db.String, nullable=True)
     published_year = db.Column(db.SmallInteger, nullable=True, default=1000)
@@ -53,7 +53,8 @@ class Author(db.Model):
     __tablename__ = "author"
 
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
-    name = db.Column(db.String, nullable=False)
+    name = db.Column(db.String, nullable=False, unique=True)
+    birth_year = db.Column(db.SmallInteger, nullable=True, default=1000)
 
     def __repr__(self):
         return f"<Author {self.name}>"
@@ -159,7 +160,10 @@ def user_details(id):
 @app.post("/user")
 def create_user():
     data = request.get_json()
-
+    user = User.query.filter_by(email=data["email"]).first()
+    if user:
+        return {"message": "Account with that email already exists"}
+    
     nextval = db.session.execute(text("SELECT nextval('user_id_seq')")).scalar()
     u_id = "user" + str(nextval).zfill(3)
 
@@ -197,11 +201,18 @@ def book_details(id):
 def add_book():
     if login() == "admin":
         data = request.get_json()
+        book = Book.query.filter_by(title=data["title"]).first()
+        if book:
+            return {"message": "Book with that title already exists"}
 
         nextval = db.session.execute(text("SELECT nextval('book_id_seq')")).scalar()
         b_id = "bk" + str(nextval).zfill(3)
 
-        new_book = Book(id=b_id, title=data["title"], pages=data["pages"])
+        new_book = Book(
+            id=b_id,
+            title=data["title"],
+            pages=data["pages"],
+        )
         db.session.add(new_book)
         db.session.commit()
         return {"message": "Book added"}, 201
@@ -263,6 +274,43 @@ def update_genre(id):
         genre.name = data.get("genre_name", genre.name)
         db.session.commit()
         return {"message": "Genre updated"}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+@app.get("/authors")
+def get_authors():
+    result = [author.name for author in Author.query.all()]
+    return {"Authors": result}
+
+
+@app.get("/author/<id>")
+def author_details(id):
+    author = Author.query.get(id)
+    print("aaaaaa", author)
+    details = {"name": author.name, "birth_year": author.birth_year}
+    return {"author details": details}
+
+
+@app.post("/author")
+def add_author():
+    if login() == "admin":
+        data = request.get_json()
+        author = Author.query.filter_by(name=data["name"]).first()
+        if author:
+            return {"message": "Author already exists"}
+        
+        nextval = db.session.execute(text("SELECT nextval('author_id_seq')")).scalar()
+        a_id = "au" + str(nextval).zfill(3)
+
+        new_author = Author(
+            id=a_id, name=data["name"], birth_year=data.get("birth_year", 1000)
+        )
+        db.session.add(new_author)
+        db.session.commit()
+        return {"message": "Author added"}, 201
     elif login() == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:

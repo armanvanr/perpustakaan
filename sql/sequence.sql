@@ -17,6 +17,7 @@ CREATE SEQUENCE borrow_id_seq AS INT MINVALUE 1 MAXVALUE 999 START 1 NO CYCLE;
 -- TABLES
 SELECT * FROM public.user
 SELECT * FROM public.genre
+SELECT * FROM public.author
 
 
 -- DELETE FROM public.genre
