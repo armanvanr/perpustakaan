@@ -2,6 +2,7 @@ from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy import text
+from datetime import date
 from dotenv import load_dotenv
 import os
 
@@ -82,7 +83,14 @@ class Borrow(db.Model):
     id = db.Column(db.String, primary_key=True, unique=True, index=True)
     book_id = db.Column(db.String, db.ForeignKey("book.id"), nullable=False)
     user_id = db.Column(db.String, db.ForeignKey("user.id"), nullable=False)
+    book_title = db.Column(db.String, nullable=True)
+    member_name = db.Column(db.String, nullable=True)
     status = db.Column(db.String, nullable=True)
+    approve_admin = db.Column(db.String, nullable=True)
+    return_admin = db.Column(db.String, nullable=True)
+    requested_date = db.Column(db.Date, nullable=True)
+    approved_date = db.Column(db.Date, nullable=True)
+    returned_date = db.Column(db.Date, nullable=True)
 
     def __repr__(self):
         return f"<Borrow status: {self.status}>"
@@ -130,9 +138,9 @@ def login():
         return "Wrong pwd"
 
     if user.type == "admin":
-        return "admin"
+        return ["admin", user.id]
     else:
-        return "member"
+        return ["member", user.id]
 
 
 # Routes
@@ -144,7 +152,7 @@ def welcome():
 # Users
 @app.get("/users")
 def get_users():
-    if login() == "admin":
+    if login()[0] == "admin":
         result = [
             {"name": user.name, "type": user.type, "id": user.id}
             for user in User.query.all()
@@ -158,7 +166,7 @@ def get_users():
 
 @app.get("/user/<id>")
 def user_details(id):
-    if login() == "admin":
+    if login()[0] == "admin":
         user = User.query.get(id)
         result = {"name": user.name, "type": user.type, "email": user.email}
         return {"user details": result}
@@ -183,7 +191,7 @@ def create_user():
         name=data["name"],
         email=data["email"],
         password=data["password"],
-        # type="admin",
+        type=data.get("type", "member"),
     )
     db.session.add(new_user)
     db.session.commit()
@@ -212,7 +220,7 @@ def book_details(id):
 
 @app.post("/book")
 def add_book():
-    if login() == "admin":
+    if login()[0] == "admin":
         data = request.get_json()
         book = Book.query.filter_by(title=data["title"]).first()
         if book:
@@ -237,7 +245,7 @@ def add_book():
 
 @app.put("/book/<id>")
 def update_book(id):
-    if login() == "admin":
+    if login()[0] == "admin":
         data = request.get_json()
         book = Book.query.get(id)
         book.title = data.get("title", book.title)
@@ -270,7 +278,7 @@ def genre_details(id):
 
 @app.post("/genre")
 def add_genre():
-    if login() == "admin":
+    if login()[0] == "admin":
         data = request.get_json()
         genre = Genre.query.filter_by(name=data["genre_name"]).first()
         if genre:
@@ -291,7 +299,7 @@ def add_genre():
 
 @app.put("/genre/<id>")
 def update_genre(id):
-    if login() == "admin":
+    if login()[0] == "admin":
         data = request.get_json()
         genre = Genre.query.get(id)
         genre.name = data.get("genre_name", genre.name)
@@ -323,7 +331,7 @@ def author_details(id):
 
 @app.post("/author")
 def add_author():
-    if login() == "admin":
+    if login()[0] == "admin":
         data = request.get_json()
         author = Author.query.filter_by(name=data["name"]).first()
         if author:
@@ -347,7 +355,7 @@ def add_author():
 # Junction Tables' Endpoints
 @app.get("/bookauthors")
 def get_book_author():
-    if login() == "admin":
+    if login()[0] == "admin":
         result = [
             {"book_id": ba.book_id, "author_id": ba.author_id}
             for ba in Book_Author.query.all()
@@ -361,7 +369,7 @@ def get_book_author():
 
 @app.post("/bookauthor")
 def add_book_author():
-    if login() == "admin":
+    if login()[0] == "admin":
         data = request.get_json()
         ba = Book_Author.query.filter_by(
             book_id=data["book_id"], author_id=data["author_id"]
@@ -382,7 +390,7 @@ def add_book_author():
 
 @app.get("/bookgenres")
 def get_book_genre():
-    if login() == "admin":
+    if login()[0] == "admin":
         result = [
             {"book_id": bg.book_id, "genre_id": bg.genre_id}
             for bg in Book_Genre.query.all()
@@ -396,7 +404,7 @@ def get_book_genre():
 
 @app.post("/bookgenre")
 def add_book_genre():
-    if login() == "admin":
+    if login()[0] == "admin":
         data = request.get_json()
         bg = Book_Genre.query.filter_by(
             book_id=data["book_id"], genre_id=data["genre_id"]
@@ -415,15 +423,62 @@ def add_book_genre():
         return {"message": "Unauthorized"}, 401
 
 
-# @app.get("/borrows")
-# def get_borrows():
-#     if login() == "admin":
-#         result = [{} for borrow in Borrow.query.all()]
-#         return {"result":result}
-#     elif login() == "Wrong pwd":
-#         return {"message": "Incorrect password"}, 400
-#     else:
-#         return {"message": "Unauthorized"}, 401
+@app.get("/borrows")
+def get_borrows():
+    if login()[0] == "admin":
+        result = [
+            {
+                "id": borrow.id,
+                "title": borrow.book_title,
+                "member": borrow.member_name,
+                "status": borrow.status,
+                "admins": {
+                    "approved_by": borrow.approve_admin,
+                    "returned_by": borrow.return_admin,
+                },
+                "date": {
+                    "approved_at": borrow.approved_date,
+                    "requested_at": borrow.requested_date,
+                    "returned_at": borrow.returned_date,
+                },
+            }
+            for borrow in Borrow.query.all()
+        ]
+        return {"result": result}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+@app.post("/borrow/req/<bk_id>")
+def request_borrow(bk_id):
+    type, u_id = login()
+    if type == "admin" or "member":
+        book = Book.query.get(bk_id)
+        user = User.query.get(u_id)
+
+        nextval = db.session.execute(text("SELECT nextval('borrow_id_seq')")).scalar()
+        brw_id = "brw" + str(nextval).zfill(3)
+
+        new_borrow = Borrow(
+            id=brw_id,
+            book_id=bk_id,
+            user_id=u_id,
+            book_title=book.title,
+            member_name=user.name,
+            status="requested",
+            requested_date=date.today(),
+        )
+        db.session.add(new_borrow)
+        db.session.commit()
+
+        return {"message": "Request successfully created"}, 201
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
 
 if __name__ == "__main__":
     app.run(debug=True)
