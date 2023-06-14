@@ -40,7 +40,9 @@ class Book(db.Model):
 
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
     title = db.Column(db.String, nullable=False)
-    pages = db.Column(db.Integer, nullable=True)
+    pages = db.Column(db.SmallInteger, nullable=False, default=1)
+    publisher = db.Column(db.String, nullable=True)
+    published_year = db.Column(db.SmallInteger, nullable=True, default=1000)
 
     def __repr__(self):
         return f"<Book {self.title}>"
@@ -143,7 +145,7 @@ def get_users():
 
 
 @app.get("/user/<id>")
-def get_user(id):
+def user_details(id):
     if login() == "admin":
         user = User.query.get(id)
         result = {"name": user.name, "type": user.type, "email": user.email}
@@ -171,6 +173,42 @@ def create_user():
     db.session.add(new_user)
     db.session.commit()
     return {"message": "User account successfully created"}, 201
+
+
+@app.get("/books")
+def get_books():
+    result = [{"title": book.title} for book in Book.query.all()]
+    return {"books": result}
+
+
+@app.get("/book/<id>")
+def book_details(id):
+    book = Book.query.get(id)
+    details = {
+        "title": book.title,
+        "num_of_page": book.pages,
+        "published_year": book.published_year,
+        "publisher": book.publisher,
+    }
+    return {"book": details}
+
+
+@app.post("/book")
+def add_book():
+    if login() == "admin":
+        data = request.get_json()
+
+        nextval = db.session.execute(text("SELECT nextval('book_id_seq')")).scalar()
+        b_id = "bk" + str(nextval).zfill(3)
+
+        new_book = Book(id=b_id, title=data["title"], pages=data["pages"])
+        db.session.add(new_book)
+        db.session.commit()
+        return {"message": "Book added"}, 201
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 404
+    else:
+        return {"message": "Unauthorized"}, 401
 
 
 if __name__ == "__main__":
