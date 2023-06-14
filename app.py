@@ -191,11 +191,37 @@ def create_user():
         name=data["name"],
         email=data["email"],
         password=data["password"],
-        type=data.get("type", "member"),
     )
     db.session.add(new_user)
     db.session.commit()
     return {"message": "User account successfully created"}, 201
+
+
+@app.post("/admin")
+def create_admin():
+    if login()[0] == "admin":
+        data = request.get_json()
+        user = User.query.filter_by(email=data["email"]).first()
+        if user:
+            user.type = "admin"
+        else:
+            nextval = db.session.execute(text("SELECT nextval('user_id_seq')")).scalar()
+            u_id = "user" + str(nextval).zfill(3)
+
+            new_user = User(
+                id=u_id,
+                name=data["name"],
+                email=data["email"],
+                password=data["password"],
+                type="admin"
+            )
+            db.session.add(new_user)
+        db.session.commit()
+        return {"message": "Admin added"}, 201
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
 
 
 @app.get("/books")
@@ -451,7 +477,7 @@ def get_borrows():
         return {"message": "Unauthorized"}, 401
 
 
-@app.post("/borrow/req/<bk_id>")
+@app.post("/borrow/<bk_id>")
 def request_borrow(bk_id):
     type, u_id = login()
     if type == "admin" or "member":
@@ -479,6 +505,40 @@ def request_borrow(bk_id):
     else:
         return {"message": "Unauthorized"}, 401
 
+
+@app.put("/borrow/approve/<id>")
+def approve_request(id):
+    type, u_id = login()
+    if type == "admin":
+        admin = User.query.get(u_id)
+        borrow = Borrow.query.get(id)
+
+        borrow.status = "approved"
+        borrow.approve_admin = admin.name
+        borrow.approved_date = date(2023, 6, 16)
+        db.session.commit()
+        return {"message": "Request approved"}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+@app.put("/borrow/return/<id>")
+def return_book(id):
+    type, u_id = login()
+    if type == "admin":
+        admin = User.query.get(u_id)
+        borrow = Borrow.query.get(id)
+
+        borrow.status = "returned"
+        borrow.return_admin = admin.name
+        borrow.returned_date = date(2023, 6, 22)
+        db.session.commit()
+        return {"message": "Book returned"}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
 
 if __name__ == "__main__":
     app.run(debug=True)
