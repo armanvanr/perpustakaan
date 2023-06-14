@@ -211,5 +211,22 @@ def add_book():
         return {"message": "Unauthorized"}, 401
 
 
+@app.put("/book/<id>")
+def update_book(id):
+    if login() == "admin":
+        data = request.get_json()
+        book = Book.query.get(id)
+        book.title = data.get("title", book.title)
+        book.pages = data.get("pages", book.pages)
+        book.publisher = data.get("publisher", book.publisher)
+        book.published_year = data.get("published_year", book.published_year)
+        db.session.commit()
+        return {"message": "Book updated"}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 404
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
 if __name__ == "__main__":
     app.run(debug=True)
