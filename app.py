@@ -43,6 +43,8 @@ class Book(db.Model):
     pages = db.Column(db.SmallInteger, nullable=False, default=1)
     publisher = db.Column(db.String, nullable=True)
     published_year = db.Column(db.SmallInteger, nullable=True, default=1000)
+    author_list = db.relationship("Book_Author", backref="written_book", lazy="dynamic")
+    genre_list = db.relationship("Book_Genre", backref="book", lazy="dynamic")
 
     def __repr__(self):
         return f"<Book {self.title}>"
@@ -55,6 +57,7 @@ class Author(db.Model):
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
     name = db.Column(db.String, nullable=False, unique=True)
     birth_year = db.Column(db.SmallInteger, nullable=True, default=1000)
+    book_list = db.relationship("Book_Author", backref="writer", lazy="dynamic")
 
     def __repr__(self):
         return f"<Author {self.name}>"
@@ -66,6 +69,7 @@ class Genre(db.Model):
 
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
     name = db.Column(db.String, nullable=False)
+    book_list = db.relationship("Book_Genre", backref="genre", lazy="dynamic")
 
     def __repr__(self):
         return f"<Genre {self.name}>"
@@ -86,6 +90,8 @@ class Borrow(db.Model):
 
 # Book-Author table
 class Book_Author(db.Model):
+    __tablename__ = "book_author"
+
     book_id = db.Column(
         db.String, db.ForeignKey("book.id"), primary_key=True, nullable=False
     )
@@ -99,6 +105,8 @@ class Book_Author(db.Model):
 
 # Book-Genre table
 class Book_Genre(db.Model):
+    __tablename__ = "book_genre"
+
     book_id = db.Column(
         db.String, db.ForeignKey("book.id"), primary_key=True, nullable=False
     )
@@ -196,6 +204,8 @@ def book_details(id):
         "num_of_page": book.pages,
         "published_year": book.published_year,
         "publisher": book.publisher,
+        "genre": [item.genre.name for item in book.genre_list.all()],
+        "author": [item.writer.name for item in book.author_list.all()],
     }
     return {"book": details}
 
@@ -248,6 +258,16 @@ def get_genres():
     return {"Genres": result}
 
 
+@app.get("/genre/<id>")
+def genre_details(id):
+    genre = Genre.query.get(id)
+    result = {
+        "genre": genre.name,
+        "books": [item.book.title for item in genre.book_list.all()],
+    }
+    return result
+
+
 @app.post("/genre")
 def add_genre():
     if login() == "admin":
@@ -293,7 +313,11 @@ def get_authors():
 def author_details(id):
     author = Author.query.get(id)
     print("aaaaaa", author)
-    details = {"name": author.name, "birth_year": author.birth_year}
+    details = {
+        "name": author.name,
+        "birth_year": author.birth_year,
+        "books": [item.written_book.title for item in author.book_list.all()],
+    }
     return {"author details": details}
 
 
