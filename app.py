@@ -132,10 +132,10 @@ def login():
     data_pwd = request.authorization["password"]
     user = User.query.filter_by(email=data_email).first()
     if not user:
-        return "unauthorized"
+        return ["unauthorized", 401]
 
     if user.password != data_pwd:
-        return "Wrong pwd"
+        return ["Wrong pwd", 400]
 
     if user.type == "admin":
         return ["admin", user.id]
@@ -150,32 +150,37 @@ def welcome():
 
 
 # Users
+# show all users, accessible only for admins
 @app.get("/users")
 def get_users():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         result = [
             {"name": user.name, "type": user.type, "id": user.id}
             for user in User.query.all()
         ]
         return {"users": result}
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
 
 
+# show details of a user, accessible only for admins
 @app.get("/user/<id>")
 def user_details(id):
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         user = User.query.get(id)
         result = {"name": user.name, "type": user.type, "email": user.email}
         return {"user details": result}
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
 
 
+# create a new member account
 @app.post("/user")
 def create_user():
     data = request.get_json()
@@ -197,13 +202,19 @@ def create_user():
     return {"message": "User account successfully created"}, 201
 
 
+# create a new admin or upgrade an existing member to become admin
 @app.post("/admin")
 def create_admin():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         data = request.get_json()
         user = User.query.filter_by(email=data["email"]).first()
+
+        # upgrade member to admin
         if user:
             user.type = "admin"
+
+        # add a new admin
         else:
             nextval = db.session.execute(text("SELECT nextval('user_id_seq')")).scalar()
             u_id = "user" + str(nextval).zfill(3)
@@ -213,15 +224,47 @@ def create_admin():
                 name=data["name"],
                 email=data["email"],
                 password=data["password"],
-                type="admin"
+                type="admin",
             )
             db.session.add(new_user)
         db.session.commit()
         return {"message": "Admin added"}, 201
+    elif u_type == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+# update user data
+@app.put("/user/<id>")
+def update_user(id):
+    u_type, u_id = login()
+    # users can change only their own data
+    if u_type == "admin" or "member":
+        user = User.query.get(id)
+        if user.id == u_id:
+            data = request.get_json()
+            user.name = data.get("name", user.name)
+            user.password = data.get("password", user.password)
+            db.session.commit()
+            return {"message": "User data updated"}
+        return {"message": "Unauthorized"}, 401
     elif login() == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
+
+
+# # delete user data
+# @app.delete("/user/<id>")
+# def delete_user(id):
+#     if login()[0] == "admin" or "member":
+
+#         return {"message":"User data updated"}
+#     elif login() == "Wrong pwd":
+#         return {"message": "Incorrect password"}, 400
+#     else:
+#         return {"message": "Unauthorized"}, 401
 
 
 @app.get("/books")
@@ -246,7 +289,8 @@ def book_details(id):
 
 @app.post("/book")
 def add_book():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         data = request.get_json()
         book = Book.query.filter_by(title=data["title"]).first()
         if book:
@@ -263,7 +307,7 @@ def add_book():
         db.session.add(new_book)
         db.session.commit()
         return {"message": "Book added"}, 201
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -271,7 +315,8 @@ def add_book():
 
 @app.put("/book/<id>")
 def update_book(id):
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         data = request.get_json()
         book = Book.query.get(id)
         book.title = data.get("title", book.title)
@@ -280,7 +325,7 @@ def update_book(id):
         book.published_year = data.get("published_year", book.published_year)
         db.session.commit()
         return {"message": "Book updated"}
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -304,7 +349,8 @@ def genre_details(id):
 
 @app.post("/genre")
 def add_genre():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         data = request.get_json()
         genre = Genre.query.filter_by(name=data["genre_name"]).first()
         if genre:
@@ -317,7 +363,7 @@ def add_genre():
         db.session.add(new_genre)
         db.session.commit()
         return {"message": "Genre added"}, 201
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -325,13 +371,14 @@ def add_genre():
 
 @app.put("/genre/<id>")
 def update_genre(id):
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         data = request.get_json()
         genre = Genre.query.get(id)
         genre.name = data.get("genre_name", genre.name)
         db.session.commit()
         return {"message": "Genre updated"}
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -357,7 +404,8 @@ def author_details(id):
 
 @app.post("/author")
 def add_author():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         data = request.get_json()
         author = Author.query.filter_by(name=data["name"]).first()
         if author:
@@ -372,7 +420,7 @@ def add_author():
         db.session.add(new_author)
         db.session.commit()
         return {"message": "Author added"}, 201
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -381,13 +429,14 @@ def add_author():
 # Junction Tables' Endpoints
 @app.get("/bookauthors")
 def get_book_author():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         result = [
             {"book_id": ba.book_id, "author_id": ba.author_id}
             for ba in Book_Author.query.all()
         ]
         return {"book-author": result}
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -395,7 +444,8 @@ def get_book_author():
 
 @app.post("/bookauthor")
 def add_book_author():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         data = request.get_json()
         ba = Book_Author.query.filter_by(
             book_id=data["book_id"], author_id=data["author_id"]
@@ -408,7 +458,7 @@ def add_book_author():
         db.session.commit()
         print(new_input)
         return {"message": "Book-Author data inserted"}, 201
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -416,13 +466,14 @@ def add_book_author():
 
 @app.get("/bookgenres")
 def get_book_genre():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         result = [
             {"book_id": bg.book_id, "genre_id": bg.genre_id}
             for bg in Book_Genre.query.all()
         ]
         return {"book-genre": result}
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -430,7 +481,8 @@ def get_book_genre():
 
 @app.post("/bookgenre")
 def add_book_genre():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         data = request.get_json()
         bg = Book_Genre.query.filter_by(
             book_id=data["book_id"], genre_id=data["genre_id"]
@@ -443,7 +495,7 @@ def add_book_genre():
         db.session.commit()
         print(new_input)
         return {"message": "Book-Genre data inserted"}, 201
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -451,7 +503,8 @@ def add_book_genre():
 
 @app.get("/borrows")
 def get_borrows():
-    if login()[0] == "admin":
+    u_type = login()[0]
+    if u_type == "admin":
         result = [
             {
                 "id": borrow.id,
@@ -471,7 +524,7 @@ def get_borrows():
             for borrow in Borrow.query.all()
         ]
         return {"result": result}
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -479,8 +532,8 @@ def get_borrows():
 
 @app.post("/borrow/<bk_id>")
 def request_borrow(bk_id):
-    type, u_id = login()
-    if type == "admin" or "member":
+    u_type, u_id = login()
+    if u_type == "admin" or "member":
         book = Book.query.get(bk_id)
         user = User.query.get(u_id)
 
@@ -500,7 +553,7 @@ def request_borrow(bk_id):
         db.session.commit()
 
         return {"message": "Request successfully created"}, 201
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -508,8 +561,8 @@ def request_borrow(bk_id):
 
 @app.put("/borrow/approve/<id>")
 def approve_request(id):
-    type, u_id = login()
-    if type == "admin":
+    u_type, u_id = login()
+    if u_type == "admin":
         admin = User.query.get(u_id)
         borrow = Borrow.query.get(id)
 
@@ -518,15 +571,16 @@ def approve_request(id):
         borrow.approved_date = date(2023, 6, 16)
         db.session.commit()
         return {"message": "Request approved"}
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
 
+
 @app.put("/borrow/return/<id>")
 def return_book(id):
-    type, u_id = login()
-    if type == "admin":
+    u_type, u_id = login()
+    if u_type == "admin":
         admin = User.query.get(u_id)
         borrow = Borrow.query.get(id)
 
@@ -535,10 +589,11 @@ def return_book(id):
         borrow.returned_date = date(2023, 6, 22)
         db.session.commit()
         return {"message": "Book returned"}
-    elif login() == "Wrong pwd":
+    elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
+
 
 if __name__ == "__main__":
     app.run(debug=True)
