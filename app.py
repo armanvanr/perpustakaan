@@ -81,7 +81,9 @@ class Borrow(db.Model):
     __tablename__ = "borrow"
 
     id = db.Column(db.String, primary_key=True, unique=True, index=True)
-    book_id = db.Column(db.String, db.ForeignKey("book.id"), nullable=False)
+    book_id = db.Column(
+        db.String, db.ForeignKey("book.id", ondelete="CASCADE"), nullable=False
+    )
     user_id = db.Column(db.String, db.ForeignKey("user.id"), nullable=False)
     book_title = db.Column(db.String, nullable=True)
     member_name = db.Column(db.String, nullable=True)
@@ -273,12 +275,15 @@ def delete_user(id):
         return {"message": "Unauthorized"}, 401
 
 
+# Books
+# show all books
 @app.get("/books")
 def get_books():
     result = [{"title": book.title, "id": book.id} for book in Book.query.all()]
     return {"books": result}
 
 
+# show a book details
 @app.get("/book/<id>")
 def book_details(id):
     book = Book.query.get(id)
@@ -293,6 +298,7 @@ def book_details(id):
     return {"book": details}
 
 
+# add a book
 @app.post("/book")
 def add_book():
     u_type = login()[0]
@@ -319,6 +325,7 @@ def add_book():
         return {"message": "Unauthorized"}, 401
 
 
+# update a book details
 @app.put("/book/<id>")
 def update_book(id):
     u_type = login()[0]
@@ -337,12 +344,15 @@ def update_book(id):
         return {"message": "Unauthorized"}, 401
 
 
+# Genres
+# show all genres
 @app.get("/genres")
 def get_genres():
     result = [{"genre": genre.name, "id": genre.id} for genre in Genre.query.all()]
     return {"Genres": result}
 
 
+# show a genre and book lists
 @app.get("/genre/<id>")
 def genre_details(id):
     genre = Genre.query.get(id)
@@ -353,6 +363,7 @@ def genre_details(id):
     return result
 
 
+# add a genre
 @app.post("/genre")
 def add_genre():
     u_type = login()[0]
@@ -375,6 +386,7 @@ def add_genre():
         return {"message": "Unauthorized"}, 401
 
 
+# update a genre name
 @app.put("/genre/<id>")
 def update_genre(id):
     u_type = login()[0]
@@ -390,16 +402,18 @@ def update_genre(id):
         return {"message": "Unauthorized"}, 401
 
 
+# Authors
+# show all authors
 @app.get("/authors")
 def get_authors():
     result = [{"name": author.name, "id": author.id} for author in Author.query.all()]
     return {"Authors": result}
 
 
+# show an author details
 @app.get("/author/<id>")
 def author_details(id):
     author = Author.query.get(id)
-    print("aaaaaa", author)
     details = {
         "name": author.name,
         "birth_year": author.birth_year,
@@ -408,6 +422,7 @@ def author_details(id):
     return {"author details": details}
 
 
+# add an author
 @app.post("/author")
 def add_author():
     u_type = login()[0]
@@ -433,6 +448,7 @@ def add_author():
 
 
 # Junction Tables' Endpoints
+# get all book-genre relations
 @app.get("/bookauthors")
 def get_book_author():
     u_type = login()[0]
@@ -448,6 +464,7 @@ def get_book_author():
         return {"message": "Unauthorized"}, 401
 
 
+# add a book-author relation
 @app.post("/bookauthor")
 def add_book_author():
     u_type = login()[0]
@@ -462,7 +479,6 @@ def add_book_author():
         new_input = Book_Author(book_id=data["book_id"], author_id=data["author_id"])
         db.session.add(new_input)
         db.session.commit()
-        print(new_input)
         return {"message": "Book-Author data inserted"}, 201
     elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
@@ -470,6 +486,7 @@ def add_book_author():
         return {"message": "Unauthorized"}, 401
 
 
+# get all book-genre relations
 @app.get("/bookgenres")
 def get_book_genre():
     u_type = login()[0]
@@ -485,6 +502,7 @@ def get_book_genre():
         return {"message": "Unauthorized"}, 401
 
 
+# add a book-genre relation
 @app.post("/bookgenre")
 def add_book_genre():
     u_type = login()[0]
@@ -499,7 +517,6 @@ def add_book_genre():
         new_input = Book_Genre(book_id=data["book_id"], genre_id=data["genre_id"])
         db.session.add(new_input)
         db.session.commit()
-        print(new_input)
         return {"message": "Book-Genre data inserted"}, 201
     elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
@@ -507,35 +524,64 @@ def add_book_genre():
         return {"message": "Unauthorized"}, 401
 
 
+# Borrows
+# show all borrow records
 @app.get("/borrows")
 def get_borrows():
     u_type = login()[0]
     if u_type == "admin":
-        result = [
+        results = [
             {
                 "id": borrow.id,
                 "title": borrow.book_title,
                 "member": borrow.member_name,
                 "status": borrow.status,
-                "admins": {
-                    "approved_by": borrow.approve_admin,
-                    "returned_by": borrow.return_admin,
-                },
-                "date": {
-                    "approved_at": borrow.approved_date,
-                    "requested_at": borrow.requested_date,
-                    "returned_at": borrow.returned_date,
-                },
             }
             for borrow in Borrow.query.all()
         ]
-        return {"result": result}
+        return {"results": results}
     elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
 
 
+# show details of borrow
+@app.get("/borrow/<id>")
+def get_borrow(id):
+    u_type = login()[0]
+    if u_type == "admin":
+        borrow = Borrow.query.get(id)
+        details = {
+            "id": borrow.id,
+            "title": borrow.book_title,
+            "member": borrow.member_name,
+            "status": borrow.status,
+            "admins": {
+                "approved_by": borrow.approve_admin,
+                "returned_by": borrow.return_admin,
+            },
+            "date": {
+                "approved_at": borrow.approved_date,
+                "requested_at": borrow.requested_date,
+                "returned_at": borrow.returned_date,
+            },
+        }
+        # change the date format (15 Jun 2023) only for non-empty dates
+        if details["date"]["approved_at"] != None:
+            details["date"]["approved_at"] = borrow.approved_date.strftime("%d %b %Y")
+        if details["date"]["requested_at"] != None:
+            details["date"]["requested_at"] = borrow.requested_date.strftime("%d %b %Y")
+        if details["date"]["returned_at"] != None:
+            details["date"]["returned_at"] = borrow.returned_date.strftime("%d %b %Y")
+        return {"details": details}
+    elif u_type == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+# create a borrow request
 @app.post("/borrow/<bk_id>")
 def request_borrow(bk_id):
     u_type, u_id = login()
@@ -565,6 +611,7 @@ def request_borrow(bk_id):
         return {"message": "Unauthorized"}, 401
 
 
+# approve a borrow request
 @app.put("/borrow/approve/<id>")
 def approve_request(id):
     u_type, u_id = login()
@@ -583,6 +630,7 @@ def approve_request(id):
         return {"message": "Unauthorized"}, 401
 
 
+# record a book return
 @app.put("/borrow/return/<id>")
 def return_book(id):
     u_type, u_id = login()
