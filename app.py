@@ -255,16 +255,22 @@ def update_user(id):
         return {"message": "Unauthorized"}, 401
 
 
-# # delete user data
-# @app.delete("/user/<id>")
-# def delete_user(id):
-#     if login()[0] == "admin" or "member":
-
-#         return {"message":"User data updated"}
-#     elif login() == "Wrong pwd":
-#         return {"message": "Incorrect password"}, 400
-#     else:
-#         return {"message": "Unauthorized"}, 401
+# delete user data
+@app.delete("/user/<id>")
+def delete_user(id):
+    u_type, u_id = login()
+    # users can delete only their own account
+    if u_type == "admin" or "member":
+        user = User.query.get(id)
+        if user.id == u_id:
+            db.session.delete(user)
+            db.session.commit()
+            return {"message": "User data deleted"}
+        return {"message": "Unauthorized"}, 401
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
 
 
 @app.get("/books")
