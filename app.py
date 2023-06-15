@@ -30,6 +30,7 @@ class User(db.Model):
     email = db.Column(db.String, nullable=False, unique=True)
     password = db.Column(db.String, nullable=False)
     type = db.Column(db.String, nullable=False, default="member")
+    book_list = db.relationship("Borrow", backref="reader", lazy="select")
 
     def __repr__(self):
         return f"<User {self.name}>"
@@ -46,6 +47,7 @@ class Book(db.Model):
     published_year = db.Column(db.SmallInteger, nullable=True, default=1000)
     author_list = db.relationship("Book_Author", backref="written_book", lazy="dynamic")
     genre_list = db.relationship("Book_Genre", backref="book", lazy="dynamic")
+    reader_list = db.relationship("Borrow", backref="borrowed_book", lazy="select")
 
     def __repr__(self):
         return f"<Book {self.title}>"
@@ -174,7 +176,16 @@ def user_details(id):
     u_type = login()[0]
     if u_type == "admin":
         user = User.query.get(id)
-        result = {"name": user.name, "type": user.type, "email": user.email}
+        result = {
+            "name": user.name,
+            "type": user.type,
+            "email": user.email,
+            "reading_list": [
+                item.borrowed_book.title
+                for item in user.book_list
+                if item.status == "approved"
+            ],
+        }
         return {"user details": result}
     elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
