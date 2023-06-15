@@ -344,6 +344,21 @@ def update_book(id):
         return {"message": "Unauthorized"}, 401
 
 
+# delete a book
+@app.delete("/book/<id>")
+def delete_book(id):
+    u_type = login()[0]
+    if u_type == "admin":
+        book = Book.query.get(id)
+        db.session.delete(book)
+        db.session.commit()
+        return {"message": "Book deleted"}
+    elif login() == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
 # Genres
 # show all genres
 @app.get("/genres")
