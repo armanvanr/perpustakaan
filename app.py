@@ -1,7 +1,7 @@
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from sqlalchemy import text, and_, or_
+from sqlalchemy import text
 from datetime import date
 from dotenv import load_dotenv
 import os
@@ -738,6 +738,7 @@ def return_book(id):
     else:
         return {"message": "Unauthorized"}, 401
 
+
 # delete a borrow record
 @app.delete("/borrow/<id>")
 def delete_borrow(id):
@@ -756,52 +757,38 @@ def delete_borrow(id):
 # Filter in book search
 @app.get("/booksearch")
 def search_books():
-    # # this join, works
-    # books = (
-    #     db.session.query(Book, Book_Author, Author)
-    #     .filter(Book.id == Book_Author.book_id, Author.id == Book_Author.author_id)
-    #     .all()
-    # )
-
-    # this filter not work for None value
-    # genre = request.args.get("genre", None)
-    # books = (
-    #     Book.query.join(Book_Author, Book_Author.book_id == Book.id)
-    #     .join(Author, Author.id == Book_Author.author_id)
-    #     .join(Book_Genre, Book.id == Book_Genre.book_id)
-    #     .join(Genre, Genre.id == Book_Genre.genre_id)
-    #     .filter(Genre.name == genre)
-    #     .all()
-    # )
-
     args = request.args
     print("args:", args)
-    filtered_args = {k: v for k, v in args.items() if v != ""}
-    print("filtered_args:", filtered_args)
-    filters = [
-        getattr(Book, attribute) == value for attribute, value in filtered_args.items()
-    ]
-    print("filters:", and_(*filters))
-    # filters = [Genre.name=genre] #strict
-    # filters = [Book.title=title, Book.publisher=publisher, Book.published_year=published_year, Author.name=author, ]
-
-    # tag = request.form["tag"]
-    # search = "%{}%".format(tag)
-    # posts = Post.query.filter(Post.tags.like(search)).all()
-
-    books = (
+    q = (
         Book.query.join(Book_Author, Book_Author.book_id == Book.id)
         .join(Author, Author.id == Book_Author.author_id)
         .join(Book_Genre, Book.id == Book_Genre.book_id)
         .join(Genre, Genre.id == Book_Genre.genre_id)
-        .filter(or_(*filters))
-        .all()
     )
+    # Query params 'key' Handler
+    # search if book detail matches with keyword (any part of string)
+    if "title" in args.keys():
+        q = q.filter(Book.title.ilike(f"%{args['title']}%"))
+    if "author" in args.keys():
+        q = q.filter(Author.name.ilike(f"%{args['author']}%"))
+    if "publisher" in args.keys():
+        q = q.filter(Book.publisher.ilike(f"%{args['publisher']}%"))
+
+    # search if book detail exactly matches keyword
+    if "published_year" in args.keys():
+        q = q.filter(Book.published_year == args["published_year"])
+    if "genre" in args.keys():
+        q = q.filter(Genre.name == args["genre"])
+
+    books = q.all()
     print("books:", books)
     result = [
         {
+            "book_id": book.id,
             "title": book.title,
+            "publisher": book.publisher,
             "author": [item.writer.name for item in book.author_list.all()],
+            "published_year": book.published_year,
             "genre": [item.genre.name for item in book.genre_list.all()],
         }
         for book in books
