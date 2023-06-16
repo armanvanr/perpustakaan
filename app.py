@@ -738,6 +738,7 @@ def return_book(id):
     else:
         return {"message": "Unauthorized"}, 401
 
+
 # delete a borrow record
 @app.delete("/borrow/<id>")
 def delete_borrow(id):
@@ -774,39 +775,50 @@ def search_books():
     #     .all()
     # )
 
-    args = request.args
-    print("args:", args)
-    filtered_args = {k: v for k, v in args.items() if v != ""}
-    print("filtered_args:", filtered_args)
-    filters = [
-        getattr(Book, attribute) == value for attribute, value in filtered_args.items()
-    ]
-    print("filters:", and_(*filters))
+    # FILTERING QUERY PARAMS (key-value), to handle empty values
+
+    # # 1. assign query params into variable 'args'
+    # args = request.args
+    # print("args:", args)
+
+    # # 2. filter
+    # filtered_args = {k: v for k, v in args.items() if v != ""}
+    # print("filtered_args:", filtered_args)
+
+    # # 3. getattr(Book, key) == value => Book.key1=val1, Book.key2.=val2, etc.
+    # # book_filters = [Book.title="Calculus", Book.publisher="Gramedia", ...]
+    # book_filters = [
+    #     getattr(Book, key) == value
+    #     for key, value in filtered_args.items()
+    #     if key in ("title", "publisher", "published_year")
+    # ]
+
+    # author_filter = [
+    #     getattr(Author, key) == value
+    #     for key, value in filtered_args.items()
+    #     if key == "author"
+    # ]
+
+    # # 4. and_() is to combine two or more filter params using and operator.
+    # # If there's only a filter param, and operator will be omitted.
+    # # examples:
+    # # filter(and_(*[Book.title=x])) => filter(Book.title=x)
+    # # filter(and_(*[Book.title=x, Book.year=z])) => filter(Book.title=x, Book.year=z)
+    # print("author_filter", author_filter)
+    # print("filters:", and_(*book_filters))
     # filters = [Genre.name=genre] #strict
     # filters = [Book.title=title, Book.publisher=publisher, Book.published_year=published_year, Author.name=author, ]
 
+    # contoh penggunaan like/ilike
     # tag = request.form["tag"]
     # search = "%{}%".format(tag)
     # posts = Post.query.filter(Post.tags.like(search)).all()
 
-    books = (
-        Book.query.join(Book_Author, Book_Author.book_id == Book.id)
-        .join(Author, Author.id == Book_Author.author_id)
-        .join(Book_Genre, Book.id == Book_Genre.book_id)
-        .join(Genre, Genre.id == Book_Genre.genre_id)
-        .filter(or_(*filters))
-        .all()
-    )
-    print("books:", books)
-    result = [
-        {
-            "title": book.title,
-            "author": [item.writer.name for item in book.author_list.all()],
-            "genre": [item.genre.name for item in book.genre_list.all()],
-        }
-        for book in books
-    ]
-    return {"result": result}
+    # rencana implement ilike
+    # Book.title.ilike(args["title"]), Book.publisher.ilike(args["publisher"]), Book.published_year.ilike(args["published_year"]), Author.name.ilike(args["author"])
+
+    # 
+    return {"result": "result"}
 
 
 if __name__ == "__main__":
