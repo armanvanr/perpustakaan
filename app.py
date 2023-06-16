@@ -30,6 +30,7 @@ class User(db.Model):
     email = db.Column(db.String, nullable=False, unique=True)
     password = db.Column(db.String, nullable=False)
     type = db.Column(db.String, nullable=False, default="member")
+    is_show = db.Column(db.Boolean, nullable=True)
     book_list = db.relationship("Borrow", backref="reader", lazy="select")
 
     def __repr__(self):
@@ -45,6 +46,7 @@ class Book(db.Model):
     pages = db.Column(db.SmallInteger, nullable=False, default=1)
     publisher = db.Column(db.String, nullable=True)
     published_year = db.Column(db.SmallInteger, nullable=True, default=1000)
+    is_show = db.Column(db.Boolean, nullable=True)
     author_list = db.relationship("Book_Author", backref="written_book", lazy="dynamic")
     genre_list = db.relationship("Book_Genre", backref="book", lazy="dynamic")
     reader_list = db.relationship("Borrow", backref="borrowed_book", lazy="select")
@@ -60,6 +62,7 @@ class Author(db.Model):
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
     name = db.Column(db.String, nullable=False, unique=True)
     birth_year = db.Column(db.SmallInteger, nullable=True, default=1000)
+    is_show = db.Column(db.Boolean, nullable=True)
     book_list = db.relationship("Book_Author", backref="writer", lazy="dynamic")
 
     def __repr__(self):
@@ -72,20 +75,19 @@ class Genre(db.Model):
 
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
     name = db.Column(db.String, nullable=False)
+    is_show = db.Column(db.Boolean, nullable=True)
     book_list = db.relationship("Book_Genre", backref="genre", lazy="dynamic")
 
     def __repr__(self):
         return f"<Genre {self.name}>"
 
 
-# Transaction table
+# Borrow transaction table
 class Borrow(db.Model):
     __tablename__ = "borrow"
 
     id = db.Column(db.String, primary_key=True, unique=True, index=True)
-    book_id = db.Column(
-        db.String, db.ForeignKey("book.id", ondelete="CASCADE"), nullable=False
-    )
+    book_id = db.Column(db.String, db.ForeignKey("book.id"), nullable=False)
     user_id = db.Column(db.String, db.ForeignKey("user.id"), nullable=False)
     book_title = db.Column(db.String, nullable=True)
     member_name = db.Column(db.String, nullable=True)
@@ -95,6 +97,7 @@ class Borrow(db.Model):
     requested_date = db.Column(db.Date, nullable=True)
     approved_date = db.Column(db.Date, nullable=True)
     returned_date = db.Column(db.Date, nullable=True)
+    is_show = db.Column(db.Boolean, nullable=True)
 
     def __repr__(self):
         return f"<Borrow status: {self.status}>"
@@ -162,6 +165,7 @@ def get_users():
         result = [
             {"name": user.name, "type": user.type, "id": user.id}
             for user in User.query.all()
+            if user.is_show == True
         ]
         return {"users": result}
     elif u_type == "Wrong pwd":
@@ -209,6 +213,7 @@ def create_user():
         name=data["name"],
         email=data["email"],
         password=data["password"],
+        is_show=True,
     )
     db.session.add(new_user)
     db.session.commit()
@@ -238,6 +243,7 @@ def create_admin():
                 email=data["email"],
                 password=data["password"],
                 type="admin",
+                is_show=True,
             )
             db.session.add(new_user)
         db.session.commit()
@@ -276,7 +282,7 @@ def delete_user(id):
     if u_type == "admin" or "member":
         user = User.query.get(id)
         if user.id == u_id:
-            db.session.delete(user)
+            user.is_show = False
             db.session.commit()
             return {"message": "User data deleted"}
         return {"message": "Unauthorized"}, 401
@@ -290,7 +296,11 @@ def delete_user(id):
 # show all books
 @app.get("/books")
 def get_books():
-    result = [{"title": book.title, "id": book.id} for book in Book.query.all()]
+    result = [
+        {"title": book.title, "id": book.id}
+        for book in Book.query.all()
+        if book.is_show == True
+    ]
     return {"books": result}
 
 
@@ -322,11 +332,7 @@ def add_book():
         nextval = db.session.execute(text("SELECT nextval('book_id_seq')")).scalar()
         b_id = "bk" + str(nextval).zfill(3)
 
-        new_book = Book(
-            id=b_id,
-            title=data["title"],
-            pages=data["pages"],
-        )
+        new_book = Book(id=b_id, title=data["title"], pages=data["pages"], is_show=True)
         db.session.add(new_book)
         db.session.commit()
         return {"message": "Book added"}, 201
@@ -361,7 +367,7 @@ def delete_book(id):
     u_type = login()[0]
     if u_type == "admin":
         book = Book.query.get(id)
-        db.session.delete(book)
+        book.is_show = False
         db.session.commit()
         return {"message": "Book deleted"}
     elif login() == "Wrong pwd":
@@ -374,7 +380,11 @@ def delete_book(id):
 # show all genres
 @app.get("/genres")
 def get_genres():
-    result = [{"genre": genre.name, "id": genre.id} for genre in Genre.query.all()]
+    result = [
+        {"genre": genre.name, "id": genre.id}
+        for genre in Genre.query.all()
+        if genre.is_show == True
+    ]
     return {"Genres": result}
 
 
@@ -395,14 +405,14 @@ def add_genre():
     u_type = login()[0]
     if u_type == "admin":
         data = request.get_json()
-        genre = Genre.query.filter_by(name=data["genre_name"]).first()
+        genre = Genre.query.filter_by(name=data["name"]).first()
         if genre:
             return {"message": "A genre already exists"}, 400
 
         nextval = db.session.execute(text("SELECT nextval('genre_id_seq')")).scalar()
         g_id = "ge" + str(nextval).zfill(3)
 
-        new_genre = Genre(id=g_id, name=data["genre_name"])
+        new_genre = Genre(id=g_id, name=data["name"], is_show=True)
         db.session.add(new_genre)
         db.session.commit()
         return {"message": "Genre added"}, 201
@@ -419,10 +429,25 @@ def update_genre(id):
     if u_type == "admin":
         data = request.get_json()
         genre = Genre.query.get(id)
-        genre.name = data.get("genre_name", genre.name)
+        genre.name = data.get("name", genre.name)
         db.session.commit()
         return {"message": "Genre updated"}
     elif u_type == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+# delete a genre
+@app.delete("/genre/<id>")
+def delete_genre(id):
+    u_type = login()[0]
+    if u_type == "admin":
+        genre = Genre.query.get(id)
+        genre.is_show = False
+        db.session.commit()
+        return {"message": "Genre deleted"}
+    elif login() == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -432,7 +457,11 @@ def update_genre(id):
 # show all authors
 @app.get("/authors")
 def get_authors():
-    result = [{"name": author.name, "id": author.id} for author in Author.query.all()]
+    result = [
+        {"name": author.name, "id": author.id}
+        for author in Author.query.all()
+        if author.is_show == True
+    ]
     return {"Authors": result}
 
 
@@ -462,12 +491,46 @@ def add_author():
         a_id = "au" + str(nextval).zfill(3)
 
         new_author = Author(
-            id=a_id, name=data["name"], birth_year=data.get("birth_year", 1000)
+            id=a_id,
+            name=data["name"],
+            birth_year=data.get("birth_year", 1000, is_show=True),
         )
         db.session.add(new_author)
         db.session.commit()
         return {"message": "Author added"}, 201
     elif u_type == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+# update an author details
+@app.put("/author/<id>")
+def update_author(id):
+    u_type = login()[0]
+    if u_type == "admin":
+        data = request.get_json()
+        author = Author.query.get(id)
+        author.name = data.get("name", author.name)
+        author.birth_year = data.get("birth_year", author.birth_year)
+        db.session.commit()
+        return {"message": "Author updated"}
+    elif u_type == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
+
+# delete an author
+@app.delete("/author/<id>")
+def delete_author(id):
+    u_type = login()[0]
+    if u_type == "admin":
+        author = Author.query.get(id)
+        author.is_show = False
+        db.session.commit()
+        return {"message": "Author deleted"}
+    elif login() == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
@@ -564,6 +627,7 @@ def get_borrows():
                 "status": borrow.status,
             }
             for borrow in Borrow.query.all()
+            if borrow.is_show == True
         ]
         return {"results": results}
     elif u_type == "Wrong pwd":
@@ -674,6 +738,20 @@ def return_book(id):
     else:
         return {"message": "Unauthorized"}, 401
 
+# delete a borrow record
+@app.delete("/borrow/<id>")
+def delete_borrow(id):
+    u_type = login()[0]
+    if u_type == "admin":
+        borrow = Borrow.query.get(id)
+        borrow.is_show = False
+        db.session.commit()
+        return {"message": "Record deleted"}
+    elif u_type == "Wrong pwd":
+        return {"message": "Incorrect password"}, 400
+    else:
+        return {"message": "Unauthorized"}, 401
+
 
 # Filter in book search
 @app.get("/booksearch")
@@ -724,7 +802,7 @@ def search_books():
         {
             "title": book.title,
             "author": [item.writer.name for item in book.author_list.all()],
-            "genre": [item.genre.name for item in book.genre_list.all()]
+            "genre": [item.genre.name for item in book.genre_list.all()],
         }
         for book in books
     ]
