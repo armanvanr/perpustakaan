@@ -1,7 +1,7 @@
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from sqlalchemy import text
+from sqlalchemy import text, and_, or_
 from datetime import date
 from dotenv import load_dotenv
 import os
@@ -647,7 +647,7 @@ def approve_request(id):
 
         borrow.status = "approved"
         borrow.approve_admin = admin.name
-        borrow.approved_date = date(2023, 6, 16)
+        borrow.approved_date = date.today()
         db.session.commit()
         return {"message": "Request approved"}
     elif u_type == "Wrong pwd":
@@ -666,13 +666,69 @@ def return_book(id):
 
         borrow.status = "returned"
         borrow.return_admin = admin.name
-        borrow.returned_date = date(2023, 6, 22)
+        borrow.returned_date = date.today()
         db.session.commit()
         return {"message": "Book returned"}
     elif u_type == "Wrong pwd":
         return {"message": "Incorrect password"}, 400
     else:
         return {"message": "Unauthorized"}, 401
+
+
+# Filter in book search
+@app.get("/booksearch")
+def search_books():
+    # # this join, works
+    # books = (
+    #     db.session.query(Book, Book_Author, Author)
+    #     .filter(Book.id == Book_Author.book_id, Author.id == Book_Author.author_id)
+    #     .all()
+    # )
+
+    # this filter not work for None value
+    # genre = request.args.get("genre", None)
+    # books = (
+    #     Book.query.join(Book_Author, Book_Author.book_id == Book.id)
+    #     .join(Author, Author.id == Book_Author.author_id)
+    #     .join(Book_Genre, Book.id == Book_Genre.book_id)
+    #     .join(Genre, Genre.id == Book_Genre.genre_id)
+    #     .filter(Genre.name == genre)
+    #     .all()
+    # )
+
+    args = request.args
+    print("args:", args)
+    filtered_args = {k: v for k, v in args.items() if v != ""}
+    print("filtered_args:", filtered_args)
+    filters = [
+        getattr(Book, attribute) == value for attribute, value in filtered_args.items()
+    ]
+    print("filters:", and_(*filters))
+    # filters = [Genre.name=genre] #strict
+    # filters = [Book.title=title, Book.publisher=publisher, Book.published_year=published_year, Author.name=author, ]
+
+    # tag = request.form["tag"]
+    # search = "%{}%".format(tag)
+    # posts = Post.query.filter(Post.tags.like(search)).all()
+
+    books = (
+        Book.query.join(Book_Author, Book_Author.book_id == Book.id)
+        .join(Author, Author.id == Book_Author.author_id)
+        .join(Book_Genre, Book.id == Book_Genre.book_id)
+        .join(Genre, Genre.id == Book_Genre.genre_id)
+        .filter(or_(*filters))
+        .all()
+    )
+    print("books:", books)
+    result = [
+        {
+            "title": book.title,
+            "author": [item.writer.name for item in book.author_list.all()],
+            "genre": [item.genre.name for item in book.genre_list.all()]
+        }
+        for book in books
+    ]
+    return {"result": result}
 
 
 if __name__ == "__main__":
