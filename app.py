@@ -869,47 +869,41 @@ def delete_borrow(id):
 
 
 # Search diperbaiki
-# # Filter in book search
-# @app.get("/booksearch")
-# def search_books():
-#     args = request.args
-#     print("args:", args)
-#     q = (
-#         Book.query
-#         .join(Book_Author, Book_Author.book_id == Book.id)
-#         .join(Author, Author.id == Book_Author.author_id)
-#         .join(Book_Genre, Book.id == Book_Genre.book_id)
-#         .join(Genre, Genre.id == Book_Genre.genre_id)
-#     )
-#     # Query params 'key' Handler
-#     # search if book detail matches with keyword (any part of string)
-#     if "title" in args.keys():
-#         q = q.filter(Book.title.ilike(f"%{args['title']}%"))
-#     if "author" in args.keys():
-#         q = q.filter(Author.name.ilike(f"%{args['author']}%"))
-#     if "publisher" in args.keys():
-#         q = q.filter(Book.publisher.ilike(f"%{args['publisher']}%"))
+# Filter in book search
+@app.get("/booksearch")
+def search_books():
+    args = request.args
+    # Model1.query.join(Model2, Model1.rel_Model2).join(Model3, Model1.rel_Model3)
+    q = Book.query.join(Author, Book.authors).join(Genre, Book.genres)
 
-#     # search if book detail exactly matches keyword
-#     if "published_year" in args.keys():
-#         q = q.filter(Book.published_year == args["published_year"])
-#     if "genre" in args.keys():
-#         q = q.filter(Genre.name == args["genre"])
+    # Query params 'key' Handler
+    # search if book detail matches with keyword (any part of string)
+    if "title" in args.keys():
+        q = q.filter(Book.title.ilike(f"%{args['title']}%"))
+    if "author" in args.keys():
+        q = q.filter(Author.name.ilike(f"%{args['author']}%"))
+    if "publisher" in args.keys():
+        q = q.filter(Book.publisher.ilike(f"%{args['publisher']}%"))
 
-#     books = q.all()
-#     print("books:", books)
-#     result = [
-#         {
-#             "book_id": book.id,
-#             "title": book.title,
-#             "publisher": book.publisher,
-#             "author": [item.writer.name for item in book.author_list.all()],
-#             "published_year": book.published_year,
-#             "genre": [item.genre.name for item in book.genre_list.all()],
-#         }
-#         for book in books
-#     ]
-#     return {"result": result}
+    # search if book detail exactly matches keyword
+    if "published_year" in args.keys():
+        q = q.filter(Book.published_year == args["published_year"])
+    if "genre" in args.keys():
+        q = q.filter(Genre.name == args["genre"])
+
+    books = q.all()
+    result = [
+        {
+            "book_id": book.id,
+            "title": book.title,
+            "publisher": book.publisher,
+            "authors": [author.name for author in book.authors],
+            "published_year": book.published_year,
+            "genres": [genre.name for genre in book.genres],
+        }
+        for book in books
+    ]
+    return {"result": result}
 
 
 if __name__ == "__main__":
