@@ -45,6 +45,14 @@ book_author_table = db.Table(
     db.Column("author_id", db.String, db.ForeignKey("author.id"), primary_key=True),
 )
 
+# Book-Genre table
+book_genre_table = db.Table(
+    "book_genre_table",
+    db.Model.metadata,
+    db.Column("book_id", db.String, db.ForeignKey("book.id"), primary_key=True),
+    db.Column("genre_id", db.String, db.ForeignKey("genre.id"), primary_key=True),
+)
+
 
 # Book table
 class Book(db.Model):
@@ -63,6 +71,7 @@ class Book(db.Model):
         "Author", secondary=book_author_table
     )  # book_author_table (db.Table)
     genre_list = db.relationship("Book_Genre", backref="book", lazy="dynamic")
+    genres = db.relationship("Genre", secondary=book_genre_table)
     reader_list = db.relationship("Borrow", backref="borrowed_book", lazy="select")
 
     def __repr__(self):
@@ -328,6 +337,7 @@ def book_details(id):
         "published_year": book.published_year,
         "publisher": book.publisher,
         "genre": [item.genre.name for item in book.genre_list.all()],
+        "genres": [genre.name for genre in book.genres],
         "author": [
             item.writer.name for item in book.author_list.all()
         ],  # from db.Model
@@ -350,7 +360,16 @@ def add_book():
         b_id = "bk" + str(nextval).zfill(3)
 
         # create a new book instance
-        new_book = Book(id=b_id, title=data["title"], pages=data["pages"], is_show=True)
+        new_book = Book(
+            id=b_id,
+            title=data.get("title", None),
+            pages=data.get("pages", None),
+            publisher=data.get("publisher", None),
+            published_year=data.get("published_year", None),
+            is_show=True,
+        )
+
+        # adding authors
         if data["authors"]:
             # list of author names in format: [Author.name=val1, Author.name=val2, Author.name=val3]
             author_names = [getattr(Author, "name") == au for au in data["authors"]]
@@ -368,10 +387,37 @@ def add_book():
 
             # by default, this will add any new author (which is not found in database)
             for a_name in data["authors"]:
-                nextval = db.session.execute(text("SELECT nextval('author_id_seq')")).scalar()
+                nextval = db.session.execute(
+                    text("SELECT nextval('author_id_seq')")
+                ).scalar()
                 a_id = "au" + str(nextval).zfill(3)
                 new_author = Author(id=a_id, name=a_name)
                 new_book.authors.append(new_author)
+
+        # adding genres
+        if data["genres"]:
+            # list of genre names in format: [Genre.name=val1, Genre.name=val2, Genre.name=val3]
+            genres_names = [getattr(Genre, "name") == ge for ge in data["genres"]]
+
+            # find existing genre objects by filtering the name using "OR" operator
+            genre_objects = Genre.query.filter(or_(*genres_names)).all()
+
+            # append any existing genre into the list
+            if genre_objects:
+                # append each genre object into "genre" column
+                for g_obj in genre_objects:
+                    new_book.genres.append(g_obj)
+                    # remove found genre from query params list
+                    data["genres"].remove(g_obj.name)
+
+            # by default, this will add any new genre (which is not found in database)
+            for g_name in data["genres"]:
+                nextval = db.session.execute(
+                    text("SELECT nextval('genre_id_seq')")
+                ).scalar()
+                g_id = "au" + str(nextval).zfill(3)
+                new_genre = Genre(id=g_id, name=g_name)
+                new_book.genres.append(new_genre)
         db.session.add(new_book)
         db.session.commit()
         return {"message": "Book added"}, 201
