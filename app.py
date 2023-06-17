@@ -1,7 +1,7 @@
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from datetime import date
 from dotenv import load_dotenv
 import os
@@ -31,10 +31,29 @@ class User(db.Model):
     password = db.Column(db.String, nullable=False)
     type = db.Column(db.String, nullable=False, default="member")
     is_show = db.Column(db.Boolean, nullable=True)
-    book_list = db.relationship("Borrow", backref="reader", lazy="select")
+    book_list = db.relationship(
+        "Borrow", backref="reader", lazy="select", cascade="all, delete"
+    )
 
     def __repr__(self):
         return f"<User {self.name}>"
+
+
+# Book-Author table
+book_author_table = db.Table(
+    "book_author_table",
+    db.Model.metadata,
+    db.Column("book_id", db.String, db.ForeignKey("book.id"), primary_key=True),
+    db.Column("author_id", db.String, db.ForeignKey("author.id"), primary_key=True),
+)
+
+# Book-Genre table
+book_genre_table = db.Table(
+    "book_genre_table",
+    db.Model.metadata,
+    db.Column("book_id", db.String, db.ForeignKey("book.id"), primary_key=True),
+    db.Column("genre_id", db.String, db.ForeignKey("genre.id"), primary_key=True),
+)
 
 
 # Book table
@@ -47,9 +66,25 @@ class Book(db.Model):
     publisher = db.Column(db.String, nullable=True)
     published_year = db.Column(db.SmallInteger, nullable=True, default=1000)
     is_show = db.Column(db.Boolean, nullable=True)
-    author_list = db.relationship("Book_Author", backref="written_book", lazy="dynamic")
-    genre_list = db.relationship("Book_Genre", backref="book", lazy="dynamic")
-    reader_list = db.relationship("Borrow", backref="borrowed_book", lazy="select")
+    # association_table (db.Table)
+    authors = db.relationship(
+        "Author",
+        secondary=book_author_table,
+        back_populates="books",
+        cascade="all, delete",
+    )
+    genres = db.relationship(
+        "Genre",
+        secondary=book_genre_table,
+        back_populates="books",
+        cascade="all, delete",
+    )
+    reader_list = db.relationship(
+        "Borrow", backref="borrowed_book", lazy="select", cascade="all, delete"
+    )
+    # Book_Author (db.Model)
+    # author_list = db.relationship("Book_Author", backref="written_book", lazy="dynamic")
+    # genre_list = db.relationship("Book_Genre", backref="book", lazy="dynamic")
 
     def __repr__(self):
         return f"<Book {self.title}>"
@@ -63,7 +98,13 @@ class Author(db.Model):
     name = db.Column(db.String, nullable=False, unique=True)
     birth_year = db.Column(db.SmallInteger, nullable=True, default=1000)
     is_show = db.Column(db.Boolean, nullable=True)
-    book_list = db.relationship("Book_Author", backref="writer", lazy="dynamic")
+    books = db.relationship(
+        "Book",
+        secondary=book_author_table,
+        back_populates="authors",
+        cascade="all, delete",
+    )
+    # book_list = db.relationship("Book_Author", backref="writer", lazy="dynamic")
 
     def __repr__(self):
         return f"<Author {self.name}>"
@@ -76,7 +117,13 @@ class Genre(db.Model):
     id = db.Column(db.String, primary_key=True, nullable=False, unique=True, index=True)
     name = db.Column(db.String, nullable=False)
     is_show = db.Column(db.Boolean, nullable=True)
-    book_list = db.relationship("Book_Genre", backref="genre", lazy="dynamic")
+    books = db.relationship(
+        "Book",
+        secondary=book_genre_table,
+        back_populates="genres",
+        cascade="all, delete",
+    )
+    # book_list = db.relationship("Book_Genre", backref="genre", lazy="dynamic")
 
     def __repr__(self):
         return f"<Genre {self.name}>"
@@ -103,34 +150,34 @@ class Borrow(db.Model):
         return f"<Borrow status: {self.status}>"
 
 
-# Book-Author table
-class Book_Author(db.Model):
-    __tablename__ = "book_author"
+# # Book-Author model
+# class Book_Author(db.Model):
+#     __tablename__ = "book_author"
 
-    book_id = db.Column(
-        db.String, db.ForeignKey("book.id"), primary_key=True, nullable=False
-    )
-    author_id = db.Column(
-        db.String, db.ForeignKey("author.id"), primary_key=True, nullable=False
-    )
+#     book_id = db.Column(
+#         db.String, db.ForeignKey("book.id"), primary_key=True, nullable=False
+#     )
+#     author_id = db.Column(
+#         db.String, db.ForeignKey("author.id"), primary_key=True, nullable=False
+#     )
 
-    def __repr__(self):
-        return f"<Book-Author: {self.book_id}-{self.author_id}>"
+#     def __repr__(self):
+#         return f"<Book-Author: {self.book_id}-{self.author_id}>"
 
 
-# Book-Genre table
-class Book_Genre(db.Model):
-    __tablename__ = "book_genre"
+# # Book-Genre model
+# class Book_Genre(db.Model):
+#     __tablename__ = "book_genre"
 
-    book_id = db.Column(
-        db.String, db.ForeignKey("book.id"), primary_key=True, nullable=False
-    )
-    genre_id = db.Column(
-        db.String, db.ForeignKey("genre.id"), primary_key=True, nullable=False
-    )
+#     book_id = db.Column(
+#         db.String, db.ForeignKey("book.id"), primary_key=True, nullable=False
+#     )
+#     genre_id = db.Column(
+#         db.String, db.ForeignKey("genre.id"), primary_key=True, nullable=False
+#     )
 
-    def __repr__(self):
-        return f"<Book-Genre: {self.book_id}-{self.genre_id}>"
+#     def __repr__(self):
+#         return f"<Book-Genre: {self.book_id}-{self.genre_id}>"
 
 
 # Auth
@@ -184,6 +231,7 @@ def user_details(id):
             "name": user.name,
             "type": user.type,
             "email": user.email,
+            "password": user.password,
             "reading_list": [
                 item.borrowed_book.title
                 for item in user.book_list
@@ -314,7 +362,11 @@ def book_details(id):
         "published_year": book.published_year,
         "publisher": book.publisher,
         "genre": [item.genre.name for item in book.genre_list.all()],
-        "author": [item.writer.name for item in book.author_list.all()],
+        "genres": [genre.name for genre in book.genres],
+        "author": [
+            item.writer.name for item in book.author_list.all()
+        ],  # from db.Model
+        "authors": [author.name for author in book.authors],  # from db.Table
     }
     return {"book": details}
 
@@ -332,7 +384,67 @@ def add_book():
         nextval = db.session.execute(text("SELECT nextval('book_id_seq')")).scalar()
         b_id = "bk" + str(nextval).zfill(3)
 
-        new_book = Book(id=b_id, title=data["title"], pages=data["pages"], is_show=True)
+        # create a new book instance
+        new_book = Book(
+            id=b_id,
+            title=data.get("title", None),
+            pages=data.get("pages", None),
+            publisher=data.get("publisher", None),
+            published_year=data.get("published_year", None),
+            is_show=True,
+        )
+
+        # adding authors
+        if "authors" in data.keys() and data["authors"]:
+            # list of author names in format: [Author.name=val1, Author.name=val2, Author.name=val3]
+            author_names = [getattr(Author, "name") == au for au in data["authors"]]
+
+            # find existing author objects by filtering the name using "OR" operator
+            author_objects = Author.query.filter(or_(*author_names)).all()
+
+            # append any existing author into the list
+            if author_objects:
+                # append each author object into "authors" column
+                for a_obj in author_objects:
+                    new_book.authors.append(a_obj)
+                    # remove found author from query params list
+                    data["authors"].remove(a_obj.name)
+
+            # by default, this will add any new author (which is not found in database)
+            for a_name in data["authors"]:
+                nextval = db.session.execute(
+                    text("SELECT nextval('author_id_seq')")
+                ).scalar()
+                a_id = "au" + str(nextval).zfill(3)
+                new_author = Author(id=a_id, name=a_name, is_show=True)
+                new_book.authors.append(new_author)
+                db.session.add(new_author)
+
+        # adding genres
+        if "genres" in data.keys() and data["genres"]:
+            # list of genre names in format: [Genre.name=val1, Genre.name=val2, Genre.name=val3]
+            genres_names = [getattr(Genre, "name") == ge for ge in data["genres"]]
+
+            # find existing genre objects by filtering the name using "OR" operator
+            genre_objects = Genre.query.filter(or_(*genres_names)).all()
+
+            # append any existing genre into the list
+            if genre_objects:
+                # append each genre object into "genre" column
+                for g_obj in genre_objects:
+                    new_book.genres.append(g_obj)
+                    # remove found genre from query params list
+                    data["genres"].remove(g_obj.name)
+
+                # by default, this will add any new genre (which is not found in database)
+            for g_name in data["genres"]:
+                nextval = db.session.execute(
+                    text("SELECT nextval('genre_id_seq')")
+                ).scalar()
+                g_id = "au" + str(nextval).zfill(3)
+                new_genre = Genre(id=g_id, name=g_name, is_show=True)
+                new_book.genres.append(new_genre)
+                db.session.add(new_genre)
         db.session.add(new_book)
         db.session.commit()
         return {"message": "Book added"}, 201
@@ -394,7 +506,8 @@ def genre_details(id):
     genre = Genre.query.get(id)
     result = {
         "genre": genre.name,
-        "books": [item.book.title for item in genre.book_list.all()],
+        "book_list": [item.book.title for item in genre.book_list.all()],
+        "books": [book.title for book in genre.books],
     }
     return result
 
@@ -472,7 +585,8 @@ def author_details(id):
     details = {
         "name": author.name,
         "birth_year": author.birth_year,
-        "books": [item.written_book.title for item in author.book_list.all()],
+        "book_list": [item.written_book.title for item in author.book_list.all()],
+        "books": [book.title for book in author.books],
     }
     return {"author details": details}
 
@@ -538,79 +652,79 @@ def delete_author(id):
 
 # Junction Tables' Endpoints
 # get all book-genre relations
-@app.get("/bookauthors")
-def get_book_author():
-    u_type = login()[0]
-    if u_type == "admin":
-        result = [
-            {"book_id": ba.book_id, "author_id": ba.author_id}
-            for ba in Book_Author.query.all()
-        ]
-        return {"book-author": result}
-    elif u_type == "Wrong pwd":
-        return {"message": "Incorrect password"}, 400
-    else:
-        return {"message": "Unauthorized"}, 401
+# @app.get("/bookauthors")
+# def get_book_author():
+#     u_type = login()[0]
+#     if u_type == "admin":
+#         result = [
+#             {"book_id": ba.book_id, "author_id": ba.author_id}
+#             for ba in Book_Author.query.all()
+#         ]
+#         return {"book-author": result}
+#     elif u_type == "Wrong pwd":
+#         return {"message": "Incorrect password"}, 400
+#     else:
+#         return {"message": "Unauthorized"}, 401
 
 
-# add a book-author relation
-@app.post("/bookauthor")
-def add_book_author():
-    u_type = login()[0]
-    if u_type == "admin":
-        data = request.get_json()
-        ba = Book_Author.query.filter_by(
-            book_id=data["book_id"], author_id=data["author_id"]
-        ).first()
-        if ba:
-            return {"message": "Data already inserted"}, 400
+# # add a book-author relation
+# @app.post("/bookauthor")
+# def add_book_author():
+#     u_type = login()[0]
+#     if u_type == "admin":
+#         data = request.get_json()
+#         ba = Book_Author.query.filter_by(
+#             book_id=data["book_id"], author_id=data["author_id"]
+#         ).first()
+#         if ba:
+#             return {"message": "Data already inserted"}, 400
 
-        new_input = Book_Author(book_id=data["book_id"], author_id=data["author_id"])
-        db.session.add(new_input)
-        db.session.commit()
-        return {"message": "Book-Author data inserted"}, 201
-    elif u_type == "Wrong pwd":
-        return {"message": "Incorrect password"}, 400
-    else:
-        return {"message": "Unauthorized"}, 401
-
-
-# get all book-genre relations
-@app.get("/bookgenres")
-def get_book_genre():
-    u_type = login()[0]
-    if u_type == "admin":
-        result = [
-            {"book_id": bg.book_id, "genre_id": bg.genre_id}
-            for bg in Book_Genre.query.all()
-        ]
-        return {"book-genre": result}
-    elif u_type == "Wrong pwd":
-        return {"message": "Incorrect password"}, 400
-    else:
-        return {"message": "Unauthorized"}, 401
+#         new_input = Book_Author(book_id=data["book_id"], author_id=data["author_id"])
+#         db.session.add(new_input)
+#         db.session.commit()
+#         return {"message": "Book-Author data inserted"}, 201
+#     elif u_type == "Wrong pwd":
+#         return {"message": "Incorrect password"}, 400
+#     else:
+#         return {"message": "Unauthorized"}, 401
 
 
-# add a book-genre relation
-@app.post("/bookgenre")
-def add_book_genre():
-    u_type = login()[0]
-    if u_type == "admin":
-        data = request.get_json()
-        bg = Book_Genre.query.filter_by(
-            book_id=data["book_id"], genre_id=data["genre_id"]
-        ).first()
-        if bg:
-            return {"message": "Data already inserted"}, 400
+# # get all book-genre relations
+# @app.get("/bookgenres")
+# def get_book_genre():
+#     u_type = login()[0]
+#     if u_type == "admin":
+#         result = [
+#             {"book_id": bg.book_id, "genre_id": bg.genre_id}
+#             for bg in Book_Genre.query.all()
+#         ]
+#         return {"book-genre": result}
+#     elif u_type == "Wrong pwd":
+#         return {"message": "Incorrect password"}, 400
+#     else:
+#         return {"message": "Unauthorized"}, 401
 
-        new_input = Book_Genre(book_id=data["book_id"], genre_id=data["genre_id"])
-        db.session.add(new_input)
-        db.session.commit()
-        return {"message": "Book-Genre data inserted"}, 201
-    elif u_type == "Wrong pwd":
-        return {"message": "Incorrect password"}, 400
-    else:
-        return {"message": "Unauthorized"}, 401
+
+# # add a book-genre relation
+# @app.post("/bookgenre")
+# def add_book_genre():
+#     u_type = login()[0]
+#     if u_type == "admin":
+#         data = request.get_json()
+#         bg = Book_Genre.query.filter_by(
+#             book_id=data["book_id"], genre_id=data["genre_id"]
+#         ).first()
+#         if bg:
+#             return {"message": "Data already inserted"}, 400
+
+#         new_input = Book_Genre(book_id=data["book_id"], genre_id=data["genre_id"])
+#         db.session.add(new_input)
+#         db.session.commit()
+#         return {"message": "Book-Genre data inserted"}, 201
+#     elif u_type == "Wrong pwd":
+#         return {"message": "Incorrect password"}, 400
+#     else:
+#         return {"message": "Unauthorized"}, 401
 
 
 # Borrows
@@ -754,46 +868,48 @@ def delete_borrow(id):
         return {"message": "Unauthorized"}, 401
 
 
-# Filter in book search
-@app.get("/booksearch")
-def search_books():
-    args = request.args
-    print("args:", args)
-    q = (
-        Book.query.join(Book_Author, Book_Author.book_id == Book.id)
-        .join(Author, Author.id == Book_Author.author_id)
-        .join(Book_Genre, Book.id == Book_Genre.book_id)
-        .join(Genre, Genre.id == Book_Genre.genre_id)
-    )
-    # Query params 'key' Handler
-    # search if book detail matches with keyword (any part of string)
-    if "title" in args.keys():
-        q = q.filter(Book.title.ilike(f"%{args['title']}%"))
-    if "author" in args.keys():
-        q = q.filter(Author.name.ilike(f"%{args['author']}%"))
-    if "publisher" in args.keys():
-        q = q.filter(Book.publisher.ilike(f"%{args['publisher']}%"))
+# Search diperbaiki
+# # Filter in book search
+# @app.get("/booksearch")
+# def search_books():
+#     args = request.args
+#     print("args:", args)
+#     q = (
+#         Book.query
+#         .join(Book_Author, Book_Author.book_id == Book.id)
+#         .join(Author, Author.id == Book_Author.author_id)
+#         .join(Book_Genre, Book.id == Book_Genre.book_id)
+#         .join(Genre, Genre.id == Book_Genre.genre_id)
+#     )
+#     # Query params 'key' Handler
+#     # search if book detail matches with keyword (any part of string)
+#     if "title" in args.keys():
+#         q = q.filter(Book.title.ilike(f"%{args['title']}%"))
+#     if "author" in args.keys():
+#         q = q.filter(Author.name.ilike(f"%{args['author']}%"))
+#     if "publisher" in args.keys():
+#         q = q.filter(Book.publisher.ilike(f"%{args['publisher']}%"))
 
-    # search if book detail exactly matches keyword
-    if "published_year" in args.keys():
-        q = q.filter(Book.published_year == args["published_year"])
-    if "genre" in args.keys():
-        q = q.filter(Genre.name == args["genre"])
+#     # search if book detail exactly matches keyword
+#     if "published_year" in args.keys():
+#         q = q.filter(Book.published_year == args["published_year"])
+#     if "genre" in args.keys():
+#         q = q.filter(Genre.name == args["genre"])
 
-    books = q.all()
-    print("books:", books)
-    result = [
-        {
-            "book_id": book.id,
-            "title": book.title,
-            "publisher": book.publisher,
-            "author": [item.writer.name for item in book.author_list.all()],
-            "published_year": book.published_year,
-            "genre": [item.genre.name for item in book.genre_list.all()],
-        }
-        for book in books
-    ]
-    return {"result": result}
+#     books = q.all()
+#     print("books:", books)
+#     result = [
+#         {
+#             "book_id": book.id,
+#             "title": book.title,
+#             "publisher": book.publisher,
+#             "author": [item.writer.name for item in book.author_list.all()],
+#             "published_year": book.published_year,
+#             "genre": [item.genre.name for item in book.genre_list.all()],
+#         }
+#         for book in books
+#     ]
+#     return {"result": result}
 
 
 if __name__ == "__main__":
