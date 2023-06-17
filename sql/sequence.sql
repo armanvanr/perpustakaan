@@ -25,5 +25,5 @@ UPDATE public.borrow
 SET is_show = true
 
 
--- DELETE FROM public.genre
--- WHERE id = 'bk003'
+-- DELETE FROM public.user
+-- WHERE id = 'user003'
