@@ -18,6 +18,11 @@ CREATE SEQUENCE borrow_id_seq AS INT MINVALUE 1 MAXVALUE 999 START 1 NO CYCLE;
 SELECT * FROM public.user
 SELECT * FROM public.genre
 SELECT * FROM public.author
+SELECT * FROM public.book
+SELECT * FROM public.borrow
+
+UPDATE public.borrow
+SET is_show = true
 
 
 -- DELETE FROM public.genre

@@ -1,7 +1,7 @@
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from datetime import date
 from dotenv import load_dotenv
 import os
@@ -37,6 +37,15 @@ class User(db.Model):
         return f"<User {self.name}>"
 
 
+# Book-Author table
+book_author_table = db.Table(
+    "book_author_table",
+    db.Model.metadata,
+    db.Column("book_id", db.String, db.ForeignKey("book.id"), primary_key=True),
+    db.Column("author_id", db.String, db.ForeignKey("author.id"), primary_key=True),
+)
+
+
 # Book table
 class Book(db.Model):
     __tablename__ = "book"
@@ -47,7 +56,12 @@ class Book(db.Model):
     publisher = db.Column(db.String, nullable=True)
     published_year = db.Column(db.SmallInteger, nullable=True, default=1000)
     is_show = db.Column(db.Boolean, nullable=True)
-    author_list = db.relationship("Book_Author", backref="written_book", lazy="dynamic")
+    author_list = db.relationship(
+        "Book_Author", backref="written_book", lazy="dynamic"
+    )  # Book_Author (db.Model)
+    authors = db.relationship(
+        "Author", secondary=book_author_table
+    )  # book_author_table (db.Table)
     genre_list = db.relationship("Book_Genre", backref="book", lazy="dynamic")
     reader_list = db.relationship("Borrow", backref="borrowed_book", lazy="select")
 
@@ -103,7 +117,7 @@ class Borrow(db.Model):
         return f"<Borrow status: {self.status}>"
 
 
-# Book-Author table
+# Book-Author model
 class Book_Author(db.Model):
     __tablename__ = "book_author"
 
@@ -118,7 +132,7 @@ class Book_Author(db.Model):
         return f"<Book-Author: {self.book_id}-{self.author_id}>"
 
 
-# Book-Genre table
+# Book-Genre model
 class Book_Genre(db.Model):
     __tablename__ = "book_genre"
 
@@ -314,7 +328,10 @@ def book_details(id):
         "published_year": book.published_year,
         "publisher": book.publisher,
         "genre": [item.genre.name for item in book.genre_list.all()],
-        "author": [item.writer.name for item in book.author_list.all()],
+        "author": [
+            item.writer.name for item in book.author_list.all()
+        ],  # from db.Model
+        "authors": [author.name for author in book.authors],  # from db.Table
     }
     return {"book": details}
 
@@ -332,7 +349,29 @@ def add_book():
         nextval = db.session.execute(text("SELECT nextval('book_id_seq')")).scalar()
         b_id = "bk" + str(nextval).zfill(3)
 
+        # create a new book instance
         new_book = Book(id=b_id, title=data["title"], pages=data["pages"], is_show=True)
+        if data["authors"]:
+            # list of author names in format: [Author.name=val1, Author.name=val2, Author.name=val3]
+            author_names = [getattr(Author, "name") == au for au in data["authors"]]
+
+            # find existing author objects by filtering the name using "OR" operator
+            author_objects = Author.query.filter(or_(*author_names)).all()
+
+            # append any existing author into the list
+            if author_objects:
+                # append each author object into "authors" column
+                for a_obj in author_objects:
+                    new_book.authors.append(a_obj)
+                    # remove found author from query params list
+                    data["authors"].remove(a_obj.name)
+
+            # by default, this will add any new author (which is not found in database)
+            for a_name in data["authors"]:
+                nextval = db.session.execute(text("SELECT nextval('author_id_seq')")).scalar()
+                a_id = "au" + str(nextval).zfill(3)
+                new_author = Author(id=a_id, name=a_name)
+                new_book.authors.append(new_author)
         db.session.add(new_book)
         db.session.commit()
         return {"message": "Book added"}, 201
