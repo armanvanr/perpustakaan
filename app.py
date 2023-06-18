@@ -66,7 +66,6 @@ class Book(db.Model):
     publisher = db.Column(db.String, nullable=True)
     published_year = db.Column(db.SmallInteger, nullable=True, default=1000)
     is_show = db.Column(db.Boolean, nullable=True)
-    # association_table (db.Table)
     authors = db.relationship(
         "Author",
         secondary=book_author_table,
@@ -82,9 +81,6 @@ class Book(db.Model):
     reader_list = db.relationship(
         "Borrow", backref="borrowed_book", lazy="select", cascade="all, delete"
     )
-    # Book_Author (db.Model)
-    # author_list = db.relationship("Book_Author", backref="written_book", lazy="dynamic")
-    # genre_list = db.relationship("Book_Genre", backref="book", lazy="dynamic")
 
     def __repr__(self):
         return f"<Book {self.title}>"
@@ -104,7 +100,6 @@ class Author(db.Model):
         back_populates="authors",
         cascade="all, delete",
     )
-    # book_list = db.relationship("Book_Author", backref="writer", lazy="dynamic")
 
     def __repr__(self):
         return f"<Author {self.name}>"
@@ -123,7 +118,6 @@ class Genre(db.Model):
         back_populates="genres",
         cascade="all, delete",
     )
-    # book_list = db.relationship("Book_Genre", backref="genre", lazy="dynamic")
 
     def __repr__(self):
         return f"<Genre {self.name}>"
@@ -148,36 +142,6 @@ class Borrow(db.Model):
 
     def __repr__(self):
         return f"<Borrow status: {self.status}>"
-
-
-# # Book-Author model
-# class Book_Author(db.Model):
-#     __tablename__ = "book_author"
-
-#     book_id = db.Column(
-#         db.String, db.ForeignKey("book.id"), primary_key=True, nullable=False
-#     )
-#     author_id = db.Column(
-#         db.String, db.ForeignKey("author.id"), primary_key=True, nullable=False
-#     )
-
-#     def __repr__(self):
-#         return f"<Book-Author: {self.book_id}-{self.author_id}>"
-
-
-# # Book-Genre model
-# class Book_Genre(db.Model):
-#     __tablename__ = "book_genre"
-
-#     book_id = db.Column(
-#         db.String, db.ForeignKey("book.id"), primary_key=True, nullable=False
-#     )
-#     genre_id = db.Column(
-#         db.String, db.ForeignKey("genre.id"), primary_key=True, nullable=False
-#     )
-
-#     def __repr__(self):
-#         return f"<Book-Genre: {self.book_id}-{self.genre_id}>"
 
 
 # Auth
@@ -650,83 +614,6 @@ def delete_author(id):
         return {"message": "Unauthorized"}, 401
 
 
-# Junction Tables' Endpoints
-# get all book-genre relations
-# @app.get("/bookauthors")
-# def get_book_author():
-#     u_type = login()[0]
-#     if u_type == "admin":
-#         result = [
-#             {"book_id": ba.book_id, "author_id": ba.author_id}
-#             for ba in Book_Author.query.all()
-#         ]
-#         return {"book-author": result}
-#     elif u_type == "Wrong pwd":
-#         return {"message": "Incorrect password"}, 400
-#     else:
-#         return {"message": "Unauthorized"}, 401
-
-
-# # add a book-author relation
-# @app.post("/bookauthor")
-# def add_book_author():
-#     u_type = login()[0]
-#     if u_type == "admin":
-#         data = request.get_json()
-#         ba = Book_Author.query.filter_by(
-#             book_id=data["book_id"], author_id=data["author_id"]
-#         ).first()
-#         if ba:
-#             return {"message": "Data already inserted"}, 400
-
-#         new_input = Book_Author(book_id=data["book_id"], author_id=data["author_id"])
-#         db.session.add(new_input)
-#         db.session.commit()
-#         return {"message": "Book-Author data inserted"}, 201
-#     elif u_type == "Wrong pwd":
-#         return {"message": "Incorrect password"}, 400
-#     else:
-#         return {"message": "Unauthorized"}, 401
-
-
-# # get all book-genre relations
-# @app.get("/bookgenres")
-# def get_book_genre():
-#     u_type = login()[0]
-#     if u_type == "admin":
-#         result = [
-#             {"book_id": bg.book_id, "genre_id": bg.genre_id}
-#             for bg in Book_Genre.query.all()
-#         ]
-#         return {"book-genre": result}
-#     elif u_type == "Wrong pwd":
-#         return {"message": "Incorrect password"}, 400
-#     else:
-#         return {"message": "Unauthorized"}, 401
-
-
-# # add a book-genre relation
-# @app.post("/bookgenre")
-# def add_book_genre():
-#     u_type = login()[0]
-#     if u_type == "admin":
-#         data = request.get_json()
-#         bg = Book_Genre.query.filter_by(
-#             book_id=data["book_id"], genre_id=data["genre_id"]
-#         ).first()
-#         if bg:
-#             return {"message": "Data already inserted"}, 400
-
-#         new_input = Book_Genre(book_id=data["book_id"], genre_id=data["genre_id"])
-#         db.session.add(new_input)
-#         db.session.commit()
-#         return {"message": "Book-Genre data inserted"}, 201
-#     elif u_type == "Wrong pwd":
-#         return {"message": "Incorrect password"}, 400
-#     else:
-#         return {"message": "Unauthorized"}, 401
-
-
 # Borrows
 # show all borrow records
 @app.get("/borrows")
@@ -804,6 +691,7 @@ def request_borrow(bk_id):
             member_name=user.name,
             status="requested",
             requested_date=date.today(),
+            is_show=True,
         )
         db.session.add(new_borrow)
         db.session.commit()
@@ -868,7 +756,6 @@ def delete_borrow(id):
         return {"message": "Unauthorized"}, 401
 
 
-# Search diperbaiki
 # Filter in book search
 @app.get("/booksearch")
 def search_books():
