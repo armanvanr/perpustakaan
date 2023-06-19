@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy import text, or_
 from datetime import date
+from flask_httpauth import HTTPBasicAuth
 from dotenv import load_dotenv
 import os
 
@@ -161,10 +162,28 @@ def login():
         return ["member", user.id]
 
 
+auth = HTTPBasicAuth()
+
+
+@auth.verify_password
+def verify_password(username, password):
+    user = User.query.filter_by(email=username, password=password).first()
+    if user:
+        return user
+
+
+@auth.get_user_roles
+def get_user_roles(user):
+    roles = user.type
+    return roles
+
+
 # Routes
 @app.get("/")
+@auth.login_required(role=["member", "admin"])
 def welcome():
-    return {"message": "Welcome to API Perpustakaan"}
+    user = auth.current_user()
+    return {f"message": f"Hi {user.name}, welcome to API Perpustakaan"}
 
 
 # Users
@@ -400,7 +419,7 @@ def add_book():
                     # remove found genre from query params list
                     data["genres"].remove(g_obj.name)
 
-                # by default, this will add any new genre (which is not found in database)
+            # by default, this will add any new genre (which is not found in database)
             for g_name in data["genres"]:
                 nextval = db.session.execute(
                     text("SELECT nextval('genre_id_seq')")
